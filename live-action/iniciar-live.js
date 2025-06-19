@@ -7,54 +7,57 @@ async function iniciarLive(urlVideoProtegido, streamUrl) {
     process.exit(1);
   }
 
-  const browser = await chromium.launch({ headless: true });
+  console.log('🎬 Iniciando transmissão via navegador headless...');
+  console.log('🌐 Acessando vídeo:', urlVideoProtegido);
+
+  const browser = await chromium.launch();
   const context = await browser.newContext();
+
   const page = await context.newPage();
 
   try {
-    console.log('🌐 Acessando URL protegida...');
-    await page.goto(urlVideoProtegido, { waitUntil: 'networkidle', timeout: 60000 });
+    // Acessa a URL do vídeo protegido (pode ter proteção, redirecionamento, cookies)
+    await page.goto(urlVideoProtegido, { waitUntil: 'networkidle', timeout: 30000 });
 
-    // Espera para o JS que libera cookie rodar e redirecionar
-    await page.waitForTimeout(5000);
-
-    // Obter cookie __test (ou qualquer cookie definido pela proteção)
+    // Extrai cookies gerados para passar no ffmpeg
     const cookies = await context.cookies();
-    const testCookie = cookies.find(c => c.name === '__test');
-    let cookieHeader = '';
-    if (testCookie) {
-      cookieHeader = `__test=${testCookie.value}`;
-      console.log('✅ Cookie de proteção obtido:', cookieHeader);
-    } else {
-      console.log('⚠️ Cookie __test não encontrado.');
-    }
+    let cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
-    // Obter a URL final após redirecionamento da página
-    const finalUrl = page.url();
-    console.log('✅ URL final do vídeo:', finalUrl);
+    // Obtem a URL final após redirecionamento (caso tenha)
+    const urlFinal = page.url();
 
-    // Executar ffmpeg com essa URL e cookie no header
-    const ffmpegCmd = `ffmpeg -re -headers "Cookie: ${cookieHeader}" -i "${finalUrl}" -c:v libx264 -preset veryfast -maxrate 4000k -bufsize 8000k -pix_fmt yuv420p -g 50 -c:a aac -b:a 128k -ar 44100 -f flv "${streamUrl}"`;
+    console.log('✅ Proteção liberada, acessando vídeo real:', urlFinal);
+    console.log('▶️ Executando: ffmpeg -re -headers "Cookie: ' + cookieHeader + '" -i "' + urlFinal + '" -c:v libx264 -preset veryfast -maxrate 4000k -bufsize 8000k -pix_fmt yuv420p -g 50 -c:a aac -b:a 128k -ar 44100 -f flv "' + streamUrl + '"');
 
-    console.log('▶️ Executando:', ffmpegCmd);
+    // Comando ffmpeg com cookies para acessar vídeo protegido
+    const ffmpegCmd = `ffmpeg -re -headers "Cookie: ${cookieHeader}" -i "${urlFinal}" -c:v libx264 -preset veryfast -maxrate 4000k -bufsize 8000k -pix_fmt yuv420p -g 50 -c:a aac -b:a 128k -ar 44100 -f flv "${streamUrl}"`;
 
-    const ffmpegProc = exec(ffmpegCmd);
+    const ffmpegProcess = exec(ffmpegCmd);
 
-    ffmpegProc.stdout.on('data', data => process.stdout.write(`FFMPEG: ${data}`));
-    ffmpegProc.stderr.on('data', data => process.stderr.write(`FFMPEG: ${data}`));
+    ffmpegProcess.stdout.on('data', (data) => {
+      process.stdout.write(`FFMPEG: ${data}`);
+    });
 
-    ffmpegProc.on('exit', code => {
+    ffmpegProcess.stderr.on('data', (data) => {
+      process.stderr.write(`FFMPEG: ${data}`);
+    });
+
+    ffmpegProcess.on('close', (code) => {
       console.log(`✅ Finalizado com código: ${code}`);
       browser.close();
+      process.exit(code);
     });
 
   } catch (err) {
-    console.error('❌ Erro:', err);
+    console.error('❌ Falha durante a transmissão:', err);
     await browser.close();
     process.exit(1);
   }
 }
 
-// Recebe parâmetros da linha de comando
-const [,, urlVideoProtegido, streamUrl] = process.argv;
+// Recebe argumentos da linha de comando
+const args = process.argv.slice(2);
+const urlVideoProtegido = args[0];
+const streamUrl = args[1];
+
 iniciarLive(urlVideoProtegido, streamUrl);
