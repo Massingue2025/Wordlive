@@ -1,25 +1,24 @@
-name: Iniciar Live no Facebook
+name: Iniciar Live
 
 on:
   repository_dispatch:
     types: [iniciar-live]
 
 jobs:
-  live:
+  iniciar-live:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Clonar o repositório
-        uses: actions/checkout@v4
+    - name: 📁 Clonar repositório
+      uses: actions/checkout@v3
 
-      - name: Instalar FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+    - name: 🧰 Instalar dependências
+      run: |
+        sudo apt update
+        sudo apt install -y ffmpeg
+        npm install playwright
+        npx playwright install chromium
 
-      - name: Instalar Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Executar FFmpeg com Node.js
-        run: |
-          node live-action/iniciar-live.js "${{ github.event.client_payload.video_path }}" "${{ github.event.client_payload.stream_url }}"
+    - name: 📡 Iniciar transmissão com navegador headless
+      run: |
+        node live-action/iniciar-live.js "${{ github.event.client_payload.video_path }}" "${{ github.event.client_payload.stream_url }}"
