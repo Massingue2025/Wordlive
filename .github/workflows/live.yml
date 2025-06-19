@@ -26,4 +26,4 @@ jobs:
           npx playwright install --with-deps
 
       - name: Iniciar transmissão com navegador
-        run: node live-action/iniciar-live.js "${{ github.event.client_payload.video_path }}" "${{ github.event.client_payload.stream_url }}"
+        run: node live-action/iniciar-live.js "${{ github.event.client_payload.video_url }}" "${{ github.event.client_payload.stream_url }}"
