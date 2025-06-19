@@ -1,4 +1,4 @@
-name: Iniciar Live Facebook
+name: Iniciar Live Facebook com navegador
 
 on:
   repository_dispatch:
@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Clonar o repositório
+      - name: Clonar repositório
         uses: actions/checkout@v4
 
       - name: Instalar Node.js
@@ -17,5 +17,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Executar transmissão com ffmpeg
+      - name: Instalar Playwright e dependências do navegador
+        run: |
+          npm install -D playwright
+          npx playwright install --with-deps
+
+      - name: Iniciar transmissão com navegador
         run: node live-action/iniciar-live.js "${{ github.event.client_payload.video_path }}" "${{ github.event.client_payload.stream_url }}"
