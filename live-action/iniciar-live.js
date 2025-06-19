@@ -1,4 +1,4 @@
-const https = require('https');
+const { chromium } = require('playwright');
 const fs = require('fs');
 const { execSync } = require('child_process');
 
@@ -11,40 +11,33 @@ if (!videoUrl || !streamUrl) {
 
 const videoFile = 'video_baixado.mp4';
 
-function baixarVideo(url, destino) {
-  return new Promise((resolve, reject) => {
-    console.log('📥 Baixando vídeo:', url);
-    https.get(url, (res) => {
-      if (res.statusCode !== 200) {
-        return reject(new Error(`Erro ao baixar: Código ${res.statusCode}`));
-      }
+(async () => {
+  const browser = await chromium.launch();
+  const context = await browser.newContext();
+  const page = await context.newPage();
 
-      const fileStream = fs.createWriteStream(destino);
-      res.pipe(fileStream);
-
-      fileStream.on('finish', () => {
-        fileStream.close(resolve);
-      });
-
-    }).on('error', reject);
-  });
-}
-
-async function iniciarLive() {
   try {
-    await baixarVideo(videoUrl, videoFile);
+    console.log('🎬 Iniciando transmissão via navegador headless...');
+    console.log('🌐 Acessando vídeo:', videoUrl);
+
+    const [ download ] = await Promise.all([
+      page.waitForEvent('download'),
+      page.goto(videoUrl, { waitUntil: 'networkidle', timeout: 60000 })
+    ]);
+
+    await download.saveAs(videoFile);
+    console.log('✅ Vídeo baixado:', videoFile);
 
     const comando = `ffmpeg -re -i "${videoFile}" -c:v libx264 -preset veryfast -maxrate 4000k -bufsize 8000k -pix_fmt yuv420p -g 50 -c:a aac -b:a 128k -ar 44100 -f flv "${streamUrl}"`;
 
-    console.log('▶️ Transmitindo com ffmpeg...');
+    console.log('▶️ Enviando com ffmpeg...');
     execSync(comando, { stdio: 'inherit' });
 
-  } catch (e) {
-    console.error('❌ Erro:', e.message);
+  } catch (err) {
+    console.error('❌ Falha durante a transmissão:', err.message);
   } finally {
+    await browser.close();
     if (fs.existsSync(videoFile)) fs.unlinkSync(videoFile);
     console.log('✅ Finalizado');
   }
-}
-
-iniciarLive();
+})();
