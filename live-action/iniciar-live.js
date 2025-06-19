@@ -1,7 +1,7 @@
-// iniciar-live.js
 const { chromium } = require('playwright');
 const { execSync } = require('child_process');
 const fs = require('fs');
+const path = require('path');
 
 const [,, videoUrl, streamUrl] = process.argv;
 
@@ -19,7 +19,11 @@ const [,, videoUrl, streamUrl] = process.argv;
 
   try {
     console.log('🌐 Acessando vídeo:', videoUrl);
-    const response = await page.goto(videoUrl, { waitUntil: 'networkidle' });
+
+    const response = await page.goto(videoUrl, {
+      waitUntil: 'load',     // mais seguro que networkidle
+      timeout: 60000         // tempo aumentado para até 60 segundos
+    });
 
     if (!response.ok()) {
       throw new Error(`Erro ao acessar vídeo: ${response.status()} ${response.statusText()}`);
@@ -29,8 +33,9 @@ const [,, videoUrl, streamUrl] = process.argv;
     fs.writeFileSync(videoFile, buffer);
     console.log(`📥 Vídeo baixado como ${videoFile}`);
 
-    // Executa o ffmpeg
+    // Comando ffmpeg
     const comando = `ffmpeg -re -i "${videoFile}" -c:v libx264 -preset veryfast -maxrate 4000k -bufsize 8000k -pix_fmt yuv420p -g 50 -c:a aac -b:a 128k -ar 44100 -f flv "${streamUrl}"`;
+
     console.log('▶️ Executando:', comando);
     execSync(comando, { stdio: 'inherit' });
 
@@ -38,7 +43,7 @@ const [,, videoUrl, streamUrl] = process.argv;
     console.error('❌ Falha durante a transmissão:', erro.message);
   } finally {
     await browser.close();
-    if (fs.existsSync(videoFile)) fs.unlinkSync(videoFile);
+    if (fs.existsSync(videoFile)) fs.unlinkSync(videoFile); // limpeza
     console.log('✅ Transmissão finalizada');
   }
 })();
