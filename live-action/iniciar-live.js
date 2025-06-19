@@ -1,32 +1,48 @@
-const { exec } = require("child_process");
+const { chromium } = require('playwright');
+const { execSync } = require('child_process');
 
-const videoPath = process.argv[2];
-const streamUrl = process.argv[3];
+const [,, inputUrl, streamUrl] = process.argv;
 
-if (!videoPath || !streamUrl) {
-  console.error("⚠️ Erro: Caminho do vídeo e URL do stream são obrigatórios.");
+if (!inputUrl || !streamUrl) {
+  console.error('❌ Uso: node iniciar-live.js <video_url> <stream_url>');
   process.exit(1);
 }
 
-console.log(`🎬 Iniciando transmissão...`);
-console.log(`📁 Vídeo: ${videoPath}`);
-console.log(`🌐 URL: ${streamUrl}`);
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
 
-// Comando FFmpeg para transmitir ao Facebook
-const ffmpegCommand = `ffmpeg -re -i "${videoPath}" -c:v libx264 -preset veryfast -maxrate 4000k -bufsize 8000k -pix_fmt yuv420p -g 50 -c:a aac -b:a 128k -ar 44100 -f flv "${streamUrl}"`;
+  try {
+    console.log('🌐 Acessando URL...');
+    await page.goto(inputUrl, {
+      waitUntil: 'networkidle',
+      timeout: 30000
+    });
 
-console.log(`▶️ Executando: ${ffmpegCommand}`);
+    await page.waitForLoadState('networkidle');
+    const finalUrl = page.url();
 
-const processo = exec(ffmpegCommand);
+    console.log('✅ Redirecionado para:', finalUrl);
 
-processo.stdout.on("data", data => {
-  console.log(`STDOUT: ${data}`);
-});
+    // Tenta acessar diretamente o conteúdo
+    const response = await page.goto(finalUrl, { timeout: 20000 });
+    const contentType = response.headers()['content-type'];
 
-processo.stderr.on("data", data => {
-  console.error(`FFMPEG: ${data}`);
-});
+    if (!contentType || !contentType.includes('video')) {
+      throw new Error(`❌ Conteúdo inválido. Tipo: ${contentType}`);
+    }
 
-processo.on("exit", code => {
-  console.log(`✅ Finalizado com código: ${code}`);
-});
+    await browser.close();
+
+    const cmd = `ffmpeg -re -i "${finalUrl}" -c:v libx264 -preset veryfast -maxrate 4000k -bufsize 8000k -pix_fmt yuv420p -g 50 -c:a aac -b:a 128k -ar 44100 -f flv "${streamUrl}"`;
+
+    console.log('▶️ Executando:', cmd);
+    execSync(cmd, { stdio: 'inherit' });
+
+    console.log('✅ Live finalizada com sucesso.');
+  } catch (err) {
+    console.error('❌ Erro ao iniciar live:', err.message);
+    await browser.close();
+    process.exit(1);
+  }
+})();
