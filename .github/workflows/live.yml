@@ -1,15 +1,15 @@
-name: Iniciar Live no Facebook
+name: Iniciar Live Facebook
 
 on:
   repository_dispatch:
-    types: [iniciar-live]
+    types: [iniciar-live]  # disparado pelo PHP
 
 jobs:
   iniciar_transmissao:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Clonar repositório
+      - name: Clonar o repositório
         uses: actions/checkout@v4
 
       - name: Instalar Node.js
@@ -17,11 +17,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Instalar Playwright
-        run: |
-          npm install -D playwright
-          npx playwright install --with-deps
+      - name: Instalar dependências
+        run: npm install
 
-      - name: Iniciar transmissão com navegador headless
-        run: |
-          node live-action/iniciar-live.js "${{ github.event.client_payload.video_path }}" "${{ github.event.client_payload.stream_url }}"
+      - name: Transmitir vídeo para Facebook Live
+        run: node live-action/iniciar-live.js "${{ github.event.client_payload.video_path }}" "${{ github.event.client_payload.stream_url }}"
