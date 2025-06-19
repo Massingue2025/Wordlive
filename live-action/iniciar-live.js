@@ -1,49 +1,50 @@
-const { chromium } = require('playwright');
-const { execSync } = require('child_process');
+const https = require('https');
 const fs = require('fs');
-const path = require('path');
+const { execSync } = require('child_process');
 
 const [,, videoUrl, streamUrl] = process.argv;
 
-(async () => {
-  if (!videoUrl || !streamUrl) {
-    console.error('❌ Uso correto: node iniciar-live.js <video_url> <stream_url>');
-    process.exit(1);
-  }
+if (!videoUrl || !streamUrl) {
+  console.error('❌ Uso correto: node iniciar-live.js <video_url> <stream_url>');
+  process.exit(1);
+}
 
-  console.log('🎬 Iniciando transmissão via navegador headless...');
-  const browser = await chromium.launch();
-  const page = await browser.newPage();
+const videoFile = 'video_baixado.mp4';
 
-  const videoFile = 'video_baixado.mp4';
+function baixarVideo(url, destino) {
+  return new Promise((resolve, reject) => {
+    console.log('📥 Baixando vídeo:', url);
+    https.get(url, (res) => {
+      if (res.statusCode !== 200) {
+        return reject(new Error(`Erro ao baixar: Código ${res.statusCode}`));
+      }
 
+      const fileStream = fs.createWriteStream(destino);
+      res.pipe(fileStream);
+
+      fileStream.on('finish', () => {
+        fileStream.close(resolve);
+      });
+
+    }).on('error', reject);
+  });
+}
+
+async function iniciarLive() {
   try {
-    console.log('🌐 Acessando vídeo:', videoUrl);
+    await baixarVideo(videoUrl, videoFile);
 
-    const response = await page.goto(videoUrl, {
-      waitUntil: 'load',     // mais seguro que networkidle
-      timeout: 60000         // tempo aumentado para até 60 segundos
-    });
-
-    if (!response.ok()) {
-      throw new Error(`Erro ao acessar vídeo: ${response.status()} ${response.statusText()}`);
-    }
-
-    const buffer = await response.body();
-    fs.writeFileSync(videoFile, buffer);
-    console.log(`📥 Vídeo baixado como ${videoFile}`);
-
-    // Comando ffmpeg
     const comando = `ffmpeg -re -i "${videoFile}" -c:v libx264 -preset veryfast -maxrate 4000k -bufsize 8000k -pix_fmt yuv420p -g 50 -c:a aac -b:a 128k -ar 44100 -f flv "${streamUrl}"`;
 
-    console.log('▶️ Executando:', comando);
+    console.log('▶️ Transmitindo com ffmpeg...');
     execSync(comando, { stdio: 'inherit' });
 
-  } catch (erro) {
-    console.error('❌ Falha durante a transmissão:', erro.message);
+  } catch (e) {
+    console.error('❌ Erro:', e.message);
   } finally {
-    await browser.close();
-    if (fs.existsSync(videoFile)) fs.unlinkSync(videoFile); // limpeza
-    console.log('✅ Transmissão finalizada');
+    if (fs.existsSync(videoFile)) fs.unlinkSync(videoFile);
+    console.log('✅ Finalizado');
   }
-})();
+}
+
+iniciarLive();
