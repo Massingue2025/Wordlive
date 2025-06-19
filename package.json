@@ -1,0 +1,12 @@
+{
+  "name": "live-facebook-stream",
+  "version": "1.0.0",
+  "description": "Script para iniciar live Facebook usando Playwright e FFmpeg",
+  "main": "live-action/iniciar-live.js",
+  "scripts": {
+    "start": "node live-action/iniciar-live.js"
+  },
+  "dependencies": {
+    "playwright": "^1.36.0"
+  }
+}
