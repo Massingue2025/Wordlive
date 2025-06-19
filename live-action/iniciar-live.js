@@ -13,21 +13,34 @@ const videoFile = 'video_baixado.mp4';
 
 (async () => {
   const browser = await chromium.launch();
-  const context = await browser.newContext();
-  const page = await context.newPage();
+  const page = await browser.newPage();
 
   try {
     console.log('🎬 Iniciando transmissão via navegador headless...');
     console.log('🌐 Acessando vídeo:', videoUrl);
 
-    const [ download ] = await Promise.all([
-      page.waitForEvent('download'),
-      page.goto(videoUrl, { waitUntil: 'networkidle', timeout: 60000 })
-    ]);
+    await page.goto('about:blank'); // iniciar com página vazia
 
-    await download.saveAs(videoFile);
-    console.log('✅ Vídeo baixado:', videoFile);
+    const videoData = await page.evaluate(async (url) => {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Erro ao baixar vídeo: ' + response.status);
+        const blob = await response.arrayBuffer();
+        return Array.from(new Uint8Array(blob)); // serializa para Node.js
+      } catch (e) {
+        return { erro: e.message };
+      }
+    }, videoUrl);
 
+    if (videoData.erro) {
+      throw new Error(videoData.erro);
+    }
+
+    // Salvar vídeo no disco
+    fs.writeFileSync(videoFile, Buffer.from(videoData));
+    console.log('✅ Vídeo salvo:', videoFile);
+
+    // Comando ffmpeg
     const comando = `ffmpeg -re -i "${videoFile}" -c:v libx264 -preset veryfast -maxrate 4000k -bufsize 8000k -pix_fmt yuv420p -g 50 -c:a aac -b:a 128k -ar 44100 -f flv "${streamUrl}"`;
 
     console.log('▶️ Enviando com ffmpeg...');
