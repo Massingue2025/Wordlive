@@ -12,45 +12,67 @@ if (!videoUrl || !streamUrl) {
 const videoFile = 'video_baixado.mp4';
 
 (async () => {
-  const browser = await chromium.launch();
-  const page = await browser.newPage();
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-web-security', '--disable-features=IsolateOrigins,site-per-process']
+  });
+
+  const context = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+    locale: 'pt-MZ',
+    viewport: { width: 1280, height: 720 },
+    javaScriptEnabled: true,
+    bypassCSP: true,
+    ignoreHTTPSErrors: true,
+  });
+
+  const page = await context.newPage();
 
   try {
     console.log('🎬 Iniciando transmissão via navegador headless...');
     console.log('🌐 Acessando vídeo:', videoUrl);
 
-    await page.goto('about:blank'); // iniciar com página vazia
+    await page.goto(videoUrl, { waitUntil: 'networkidle', timeout: 60000 });
 
     const videoData = await page.evaluate(async (url) => {
       try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Erro ao baixar vídeo: ' + response.status);
-        const blob = await response.arrayBuffer();
-        return Array.from(new Uint8Array(blob)); // serializa para Node.js
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Referer': url,
+          },
+          mode: 'cors',
+          cache: 'no-store'
+        });
+
+        if (!res.ok) throw new Error(`Erro HTTP: ${res.status}`);
+
+        const arrayBuffer = await res.arrayBuffer();
+        return Array.from(new Uint8Array(arrayBuffer));
       } catch (e) {
         return { erro: e.message };
       }
     }, videoUrl);
 
-    if (videoData.erro) {
-      throw new Error(videoData.erro);
-    }
+    if (videoData.erro) throw new Error(videoData.erro);
 
-    // Salvar vídeo no disco
     fs.writeFileSync(videoFile, Buffer.from(videoData));
-    console.log('✅ Vídeo salvo:', videoFile);
+    console.log('✅ Vídeo salvo localmente:', videoFile);
 
-    // Comando ffmpeg
-    const comando = `ffmpeg -re -i "${videoFile}" -c:v libx264 -preset veryfast -maxrate 4000k -bufsize 8000k -pix_fmt yuv420p -g 50 -c:a aac -b:a 128k -ar 44100 -f flv "${streamUrl}"`;
+    const ffmpegCmd = `ffmpeg -re -i "${videoFile}" -c:v libx264 -preset veryfast ` +
+                      `-maxrate 4000k -bufsize 8000k -pix_fmt yuv420p -g 50 ` +
+                      `-c:a aac -b:a 128k -ar 44100 -f flv "${streamUrl}"`;
 
-    console.log('▶️ Enviando com ffmpeg...');
-    execSync(comando, { stdio: 'inherit' });
+    console.log('▶️ Iniciando transmissão com ffmpeg...');
+    execSync(ffmpegCmd, { stdio: 'inherit' });
 
   } catch (err) {
     console.error('❌ Falha durante a transmissão:', err.message);
   } finally {
     await browser.close();
     if (fs.existsSync(videoFile)) fs.unlinkSync(videoFile);
-    console.log('✅ Finalizado');
+    console.log('✅ Processo finalizado');
   }
 })();
