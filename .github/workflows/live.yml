@@ -2,7 +2,7 @@ name: Iniciar Live Facebook
 
 on:
   repository_dispatch:
-    types: [iniciar-live]  # disparado pelo PHP
+    types: [iniciar-live]
 
 jobs:
   iniciar_transmissao:
@@ -17,8 +17,5 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Instalar dependências
-        run: npm install
-
-      - name: Transmitir vídeo para Facebook Live
+      - name: Executar transmissão com ffmpeg
         run: node live-action/iniciar-live.js "${{ github.event.client_payload.video_path }}" "${{ github.event.client_payload.stream_url }}"
