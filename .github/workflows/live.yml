@@ -1,15 +1,16 @@
-name: Iniciar Live Facebook com navegador
+name: Headless Navegador - Enviar Tempo
 
 on:
   repository_dispatch:
-    types: [iniciar-live]
+    types: [cronjob]
+  workflow_dispatch:
 
 jobs:
-  iniciar_transmissao:
+  enviar_data_php:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Clonar repositório
+      - name: Clonar o repositório
         uses: actions/checkout@v4
 
       - name: Instalar Node.js
@@ -17,10 +18,10 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Instalar Playwright e dependências
+      - name: Instalar Playwright
         run: |
           npm install -D playwright
           npx playwright install --with-deps
 
-      - name: Iniciar transmissão com navegador headless
-        run: node live-action/iniciar-live.js "${{ github.event.client_payload.video_path }}" "${{ github.event.client_payload.stream_url }}"
+      - name: Executar navegador headless e registrar resposta
+        run: node bot.js
